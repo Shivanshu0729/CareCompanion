@@ -1,0 +1,260 @@
+{
+  "participants": [
+    {
+      "participant_id": "p01",
+      "files": {
+        "steps.json": false,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p02",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p03",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p04",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p05",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p06",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p07",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-05",
+      "end": "2020-03-31",
+      "days": 148
+    },
+    {
+      "participant_id": "p08",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-10",
+      "end": "2020-03-31",
+      "days": 143
+    },
+    {
+      "participant_id": "p09",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p10",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-05",
+      "end": "2020-03-31",
+      "days": 148
+    },
+    {
+      "participant_id": "p11",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p12",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": false,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": false,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p13",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": false,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    },
+    {
+      "participant_id": "p14",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-13",
+      "end": "2020-04-01",
+      "days": 141
+    },
+    {
+      "participant_id": "p15",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-08",
+      "end": "2020-04-01",
+      "days": 146
+    },
+    {
+      "participant_id": "p16",
+      "files": {
+        "steps.json": true,
+        "sleep.json": true,
+        "sleep_score.csv": true,
+        "resting_heart_rate.json": true,
+        "sedentary_minutes.json": true,
+        "lightly_active_minutes.json": true,
+        "moderately_active_minutes.json": true,
+        "very_active_minutes.json": true
+      },
+      "start": "2019-11-01",
+      "end": "2020-03-31",
+      "days": 152
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+import { api, type MemoryItem } from "../lib/api";
+
+export default function MemorySummary({ items, onRefresh }: { items: MemoryItem[]; onRefresh: () => Promise<void> }) {
+  if (!items.length) return null;
+  const editable = items.filter((item) => !item.id.startsWith("goal:") && !item.id.startsWith("summary:"));
+  return <details className="rounded border border-line bg-paper shadow-soft"><summary className="cursor-pointer px-4 py-3 text-sm font-medium text-ink">What CareCompanion remembers</summary><div className="border-t border-line px-4 py-3 text-sm">{editable.map((item) => <div className="mb-3 grid gap-2 sm:grid-cols-[7rem_1fr_auto] sm:items-start" key={item.id}><span className="text-quiet">{item.label}</span><span>{item.text}</span><span className="flex gap-2"><button className="text-xs text-dusk hover:underline" onClick={async () => { const next = window.prompt("Update this memory", item.text); if (next?.trim()) { await api.updateMemory(item.id, next.trim()); await onRefresh(); } }}>Edit</button><button className="text-xs text-[#9F4338] hover:underline" onClick={async () => { if (window.confirm("Delete this saved memory?")) { await api.deleteMemory(item.id); await onRefresh(); } }}>Delete</button></span></div>) }<button className="mt-1 text-xs text-[#9F4338] hover:underline" onClick={async () => { if (window.confirm("Clear all saved memories? This cannot be undone.")) { await api.clearMemory(); await onRefresh(); } }}>Clear saved memory</button></div></details>;
+}

@@ -19,6 +19,7 @@ from src.database.models import (
 from src.database.store import CareStore
 from src.llm.prompts import MEMORY_EXTRACTION_PROMPT, is_meal_plan_request
 from src.llm.provider import LLMMessage, LLMProvider
+from src.services.single_user_guard import contains_third_party_reference
 from src.services.text_utils import (
     canonical_category,
     canonical_memory_key,
@@ -132,6 +133,13 @@ class MemoryExtractor:
         return parse_extraction(response.content, user_message=user_message)
 
     def persist(self, user_id: str, conversation_id: str, payload: ExtractionResult) -> ExtractionResult:
+        # Strictly single-user: Filter out any items referring to third parties
+        payload.memories = [m for m in payload.memories if not contains_third_party_reference(m.value)]
+        payload.goals = [g for g in payload.goals if not contains_third_party_reference(g.description)]
+        payload.preferences = [p for p in payload.preferences if not contains_third_party_reference(p.content)]
+        payload.health = [h for h in payload.health if not contains_third_party_reference(h.concern)]
+        payload.obstacles = [o for o in payload.obstacles if not contains_third_party_reference(o.description)]
+
         logger.debug(
             "memory extraction categories user=%s conversation=%s general=%d goals=%d preferences=%d health=%d",
             user_id,

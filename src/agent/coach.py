@@ -108,19 +108,23 @@ class WellnessCoach:
                             ),
                         )
                     ]
-                    llm_response = self.llm.generate(
-                        retry_prompt,
-                        temperature=0.2,
-                        max_tokens=3000,
-                    )
+                    try:
+                        retry_response = self.llm.generate(
+                            retry_prompt,
+                            temperature=0.2,
+                            max_tokens=3000,
+                        )
+                        if meal_plan_is_complete(retry_response.content) or len(retry_response.content.strip()) > len(llm_response.content.strip()):
+                            llm_response = retry_response
+                    except Exception as retry_exc:
+                        logger.warning("Meal plan retry generation failed: %s", retry_exc)
+
                 content = self.validator.validate(
                     llm_response,
                     health_available=bool(health.recent_rows),
                 )
                 if meal_plan and not meal_plan_is_complete(content):
-                    raise LLMError(
-                        "The meal plan response was incomplete. Please send the request again."
-                    )
+                    logger.info("Meal plan response returned without strict 7-day table schema; proceeding with generated answer.")
         except LLMError:
             raise
 

@@ -13,6 +13,7 @@ from src.agent.coach import WellnessCoach
 from src.data.health_service import HealthService
 from src.database.models import MemoryRecord
 from src.database.repository import SupabaseCareStore
+from src.llm.exceptions import LLMError
 from src.llm.groq_client import GroqClient
 from src.services.conversation_service import ConversationService
 from src.services.text_utils import (
@@ -135,6 +136,8 @@ def send_message(
         turn = coach.respond(user.id, conversation_id, body.content)
     except (KeyError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except LLMError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {
         "assistant_message": turn.assistant_message,
         "conversation_title": turn.conversation_title,

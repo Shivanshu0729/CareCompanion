@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Protocol, Sequence
+from typing import Any, Iterator, Protocol, Sequence
 
 
 @dataclass(frozen=True)
@@ -29,3 +29,12 @@ class LLMProvider(Protocol):
         max_tokens: int = 900,
     ) -> LLMResponse:
         """Generate a chat completion from the hosted provider."""
+
+    def stream_generate(
+        self,
+        messages: Sequence[LLMMessage],
+        *,
+        temperature: float = 0.4,
+        max_tokens: int = 900,
+    ) -> Iterator[str]:
+        """Stream chat completion chunks from the hosted provider."""

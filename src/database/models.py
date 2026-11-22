@@ -7,13 +7,16 @@ from uuid import uuid4
 from pydantic import BaseModel, Field
 
 MemoryType = Literal[
+    "profile",
     "goal",
+    "context",
+    "progress",
     "preference",
+    "health",
     "obstacle",
     "recommendation",
     "commitment",
     "outcome",
-    "health",
     "setting",
 ]
 GoalStatus = Literal["active", "needs_attention", "completed", "paused"]
@@ -50,16 +53,25 @@ class MemoryRecord(BaseModel):
     id: str = Field(default_factory=new_id)
     user_id: str
     conversation_id: str | None = None
-    memory_type: MemoryType
+    memory_type: str = "preference"
     memory_content: str
     source: str = "user_reported"
     confidence: float = 0.7
+    importance: float = 0.7
     confirmed: bool = True
     is_current: bool = True
     memory_key: str | None = None
     superseded_by: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+    @property
+    def category(self) -> str:
+        return self.memory_type
+
+    @property
+    def value(self) -> str:
+        return self.memory_content
 
 
 class SessionSummary(BaseModel):

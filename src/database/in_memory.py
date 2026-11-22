@@ -14,7 +14,13 @@ from src.database.models import (
     SessionSummary,
     utcnow,
 )
-from src.services.text_utils import is_near_duplicate, memory_key as infer_memory_key, normalize_text
+from src.services.text_utils import (
+    canonical_category,
+    is_near_duplicate,
+    is_single_value_key,
+    normalize_canonical_key,
+    normalize_text,
+)
 
 
 class InMemoryCareStore:
@@ -129,22 +135,43 @@ class InMemoryCareStore:
         return deepcopy(items)
 
     def add_memory(self, memory: MemoryRecord) -> MemoryRecord:
-        if memory.memory_key is None:
-            memory.memory_key = infer_memory_key(memory.memory_content)
+        memory.memory_key = normalize_canonical_key(memory.memory_key, memory.memory_type, memory.memory_content)
+        memory.memory_type = canonical_category(memory.memory_key, memory.memory_content, memory.memory_type)
         existing = self.find_similar_memory(memory.user_id, memory.memory_type, memory.memory_content)
         if existing is not None:
-            return deepcopy(existing)
-        if memory.memory_key and memory.is_current:
-            for existing in self.memories.values():
-                if (
-                    existing.user_id == memory.user_id
-                    and existing.memory_key == memory.memory_key
-                    and existing.is_current
-                ):
-                    existing.is_current = False
-                    existing.superseded_by = memory.id
-                    existing.updated_at = utcnow()
+            if memory.memory_key and is_single_value_key(memory.memory_key):
+                if normalize_text(existing.memory_content) != normalize_text(memory.memory_content):
+                    existing = None
+            if existing is not None:
+                return deepcopy(existing)
         self.memories[memory.id] = memory
+        if memory.memory_key and memory.is_current:
+            for existing_item in self.memories.values():
+                if existing_item.user_id == memory.user_id and existing_item.id != memory.id and existing_item.is_current:
+                    existing_canonical = normalize_canonical_key(
+                        existing_item.memory_key, existing_item.memory_type, existing_item.memory_content
+                    )
+                    is_match = (
+                        existing_canonical == memory.memory_key
+                        or (memory.memory_key == "current_weight" and (
+                            existing_canonical in {"current_weight", "weight", "user_weight", "body_weight", "current_body_weight"}
+                            or existing_item.memory_key in {"current_weight", "weight", "user_weight", "body_weight", "current_body_weight"}
+                            or "weight" in existing_item.memory_content.lower()
+                            or "weigh" in existing_item.memory_content.lower()
+                        ))
+                        or (memory.memory_key == "name" and (
+                            existing_canonical in {"name", "user_name", "preferred_name"}
+                            or existing_item.memory_key in {"name", "user_name", "preferred_name"}
+                            or "name is" in existing_item.memory_content.lower()
+                            or "call me" in existing_item.memory_content.lower()
+                        ))
+                    )
+                    if is_match:
+                        existing_item.is_current = False
+                        existing_item.superseded_by = memory.id
+                        existing_item.memory_key = memory.memory_key
+                        existing_item.memory_type = memory.memory_type
+                        existing_item.updated_at = utcnow()
         return deepcopy(memory)
 
     def list_memories(self, user_id: str, memory_type: str | None = None) -> list[MemoryRecord]:
@@ -153,8 +180,7 @@ class InMemoryCareStore:
             items = [item for item in items if item.memory_type == memory_type]
         items.sort(key=lambda item: item.updated_at, reverse=True)
         for item in items:
-            if item.memory_key is None:
-                item.memory_key = infer_memory_key(item.memory_content)
+            item.memory_key = normalize_canonical_key(item.memory_key, item.memory_type, item.memory_content)
         return deepcopy(items)
 
     def update_memory(self, user_id: str, memory_id: str, memory_content: str) -> MemoryRecord:
@@ -273,6 +299,7 @@ class InMemoryCareStore:
             if (
                 memory.user_id == user_id
                 and memory.memory_type == memory_type
+                and memory.is_current
                 and is_near_duplicate(memory.memory_content, content)
             ):
                 return deepcopy(memory)

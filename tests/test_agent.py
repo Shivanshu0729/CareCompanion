@@ -74,3 +74,26 @@ def test_three_session_personalization(store: InMemoryCareStore, llm: ScriptedLL
     coaching_calls = [call for call in llm.calls if "json only" not in call[0].content.lower()]
     session2_system = coaching_calls[1][0].content.lower()
     assert "improve sleep" in session2_system or "sleep routine" in session2_system
+
+
+def test_profile_query_uses_current_memories_without_llm_fallback(
+    store: InMemoryCareStore, llm: ScriptedLLM, user_a: str, tmp_path
+) -> None:
+    from src.data.health_service import HealthService
+    from src.database.models import MemoryRecord
+
+    conversation = store.create_conversation(user_a, "Profile")
+    store.add_memory(
+        MemoryRecord(
+            user_id=user_a,
+            conversation_id=conversation.id,
+            memory_type="preference",
+            memory_content="User's name is Shivanshu.",
+        )
+    )
+    coach = WellnessCoach(store, llm, health_service=HealthService(processed_path=tmp_path / "missing.csv"))
+
+    turn = coach.respond(user_a, conversation.id, "Tell me about Shivanshu")
+
+    assert "shivanshu" in turn.assistant_message.lower()
+    assert "don't have any information" not in turn.assistant_message.lower()

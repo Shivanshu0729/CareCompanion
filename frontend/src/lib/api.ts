@@ -16,12 +16,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export type Conversation = {
   id: string; title: string; is_pinned: boolean;
 };
-export type Message = { id: string; role: "user" | "assistant" | "system"; content: string };
+export type Message = { id: string; role: "user" | "assistant" | "system"; content: string; created_at?: string };
 export type MemoryItem = {
-  id: string; label: string; text: string; confirmed?: boolean; is_current?: boolean;
-  created_at?: string; updated_at?: string;
+  id: string;
+  category?: string;
+  label: string;
+  text: string;
+  key?: string | null;
+  importance?: number;
+  confidence?: number;
+  confirmed?: boolean;
+  is_current?: boolean;
+  created_at?: string;
+  updated_at?: string;
 };
-export type PendingMemory = { category: "health"; content: string; conversation_id: string };
+export type PendingMemory = { category: string; content: string; conversation_id: string };
 export type Dashboard = {
   participants: string[];
   participant: string | null;
@@ -48,15 +57,27 @@ export const api = {
     request<Conversation>(`/api/conversations/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deleteConversation: (id: string) => request(`/api/conversations/${id}`, { method: "DELETE" }),
   sendMessage: (id: string, content: string) =>
-    request<{ assistant_message: string; pending_memories: PendingMemory[] }>(`/api/conversations/${id}/messages`, {
+    request<{
+      assistant_message: string;
+      pending_memories: PendingMemory[];
+      conversation_title?: string;
+      conversation_id?: string;
+    }>(`/api/conversations/${id}/messages`, {
       method: "POST", body: JSON.stringify({ content }),
     }),
-  memory: () => request<MemoryItem[]>("/api/memory"),
-  saveMemory: (content: string, memory_type = "preference") => request("/api/memory", {
-    method: "POST", body: JSON.stringify({ content, memory_type }),
+  memory: (category?: string, search?: string, include_history = true) => {
+    const params = new URLSearchParams();
+    if (category && category !== "all") params.set("category", category);
+    if (search) params.set("search", search);
+    if (include_history) params.set("include_history", "true");
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return request<MemoryItem[]>(`/api/memory${qs}`);
+  },
+  saveMemory: (content: string, memory_type = "preference", importance = 0.7) => request("/api/memory", {
+    method: "POST", body: JSON.stringify({ content, memory_type, importance }),
   }),
-  confirmMemory: (content: string, conversation_id: string) => request("/api/memory/confirm", {
-    method: "POST", body: JSON.stringify({ content, conversation_id }),
+  confirmMemory: (content: string, conversation_id: string, memory_type = "health") => request("/api/memory/confirm", {
+    method: "POST", body: JSON.stringify({ content, conversation_id, memory_type }),
   }),
   updateMemory: (id: string, content: string) => request(`/api/memory/${id}`, {
     method: "PATCH", body: JSON.stringify({ content }),

@@ -114,7 +114,25 @@ class AuthService:
         try:
             result = client.auth.sign_in_with_password({"email": email, "password": password})
         except Exception as exc:
-            raise AuthenticationError("Login failed. Check your email and password.") from exc
+            message = str(exc).lower()
+            code = str(getattr(exc, "code", "")).lower()
+            if "email not confirmed" in message or "email_not_confirmed" in code:
+                raise AuthenticationError(
+                    "Confirm your email address first. Open the confirmation email from Supabase, then sign in."
+                ) from exc
+            if (
+                "invalid login credentials" in message
+                or "invalid_credentials" in code
+                or "invalid_grant" in code
+            ):
+                raise AuthenticationError(
+                    "The email or password is incorrect. Check them or use the password reset option."
+                ) from exc
+            if "too many" in message or "rate limit" in message:
+                raise AuthenticationError(
+                    "Too many sign-in attempts. Wait a moment, then try again."
+                ) from exc
+            raise AuthenticationError("Unable to sign in. Check your connection and Supabase configuration.") from exc
         session = _extract_session(result)
         self.ensure_profile(session)
         return session

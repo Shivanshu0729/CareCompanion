@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Iterator, Sequence
 
 from groq import Groq
 from groq import APIConnectionError, APIStatusError, APITimeoutError
@@ -118,3 +118,33 @@ class GroqClient:
         finish_reason = getattr(choices[0], "finish_reason", None)
         used_model = getattr(completion, "model", None) or model
         return LLMResponse(content=content, model=used_model, finish_reason=finish_reason)
+
+    def stream_generate(
+        self,
+        messages: Sequence[LLMMessage],
+        *,
+        temperature: float = 0.4,
+        max_tokens: int = 900,
+    ) -> Iterator[str]:
+        if not messages:
+            raise LLMResponseError("Cannot generate a response without messages.")
+        client = self._get_client()
+        model = self.settings.groq_model.strip()
+        if not model:
+            raise LLMConfigurationError("The AI model is not configured. Set a current model ID in your environment.")
+        payload = [message.to_api() for message in messages]
+        try:
+            stream = client.chat.completions.create(
+                model=model,
+                messages=payload,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stream=True,
+            )
+            for chunk in stream:
+                delta = getattr(chunk.choices[0], "delta", None)
+                chunk_text = getattr(delta, "content", None) or ""
+                if chunk_text:
+                    yield chunk_text
+        except Exception as exc:
+            raise LLMResponseError("Streaming from AI service failed.") from exc

@@ -33,6 +33,23 @@ def test_sign_in_requires_credentials() -> None:
         service.sign_in("", "")
 
 
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        (RuntimeError("Email not confirmed"), "Confirm your email"),
+        (RuntimeError("Invalid login credentials"), "email or password is incorrect"),
+        (RuntimeError("Too many requests"), "Too many sign-in attempts"),
+    ],
+)
+def test_sign_in_reports_actionable_supabase_errors(error: RuntimeError, expected: str) -> None:
+    client = MagicMock()
+    client.auth.sign_in_with_password.side_effect = error
+    service = AuthService(client=client)
+
+    with pytest.raises(AuthenticationError, match=expected):
+        service.sign_in("a@example.com", "password1")
+
+
 def test_expired_refresh_is_authentication_error() -> None:
     client = MagicMock()
     client.auth.refresh_session.side_effect = RuntimeError("expired")

@@ -15,7 +15,13 @@ from src.database.models import (
     SessionSummary,
     utcnow,
 )
-from src.services.text_utils import is_near_duplicate, memory_key as infer_memory_key, normalize_text
+from src.services.text_utils import (
+    canonical_category,
+    is_near_duplicate,
+    is_single_value_key,
+    normalize_canonical_key,
+    normalize_text,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -177,51 +183,72 @@ class SupabaseCareStore:
         return messages
 
     def add_memory(self, memory: MemoryRecord) -> MemoryRecord:
-        if memory.memory_key is None:
-            memory.memory_key = infer_memory_key(memory.memory_content)
+        memory.memory_key = normalize_canonical_key(memory.memory_key, memory.memory_type, memory.memory_content)
+        memory.memory_type = canonical_category(memory.memory_key, memory.memory_content, memory.memory_type)
         existing = self.find_similar_memory(memory.user_id, memory.memory_type, memory.memory_content)
         if existing is not None:
-            return existing
+            if memory.memory_key and is_single_value_key(memory.memory_key):
+                if normalize_text(existing.memory_content) != normalize_text(memory.memory_content):
+                    existing = None
+            if existing is not None:
+                return existing
+
+        # Insert new record FIRST so its ID exists in user_memories
+        # (required by foreign key constraint on superseded_by uuid references user_memories(id))
+        rows = self._execute(self.client.table("user_memories").insert(memory.model_dump(mode="json")))
+        inserted = self._one(rows, MemoryRecord) or memory
+
         if memory.memory_key and memory.is_current:
-            previous = next(
-                (
-                    item
-                    for item in self.list_memories(memory.user_id)
-                    if item.id != memory.id
-                    and item.memory_key == memory.memory_key
-                    and item.confirmed
-                    and item.is_current
-                ),
-                None,
-            )
-            if previous is not None:
+            previous_items = []
+            for item in self.list_memories(memory.user_id):
+                if item.id == inserted.id or not item.is_current:
+                    continue
+                is_match = (
+                    item.memory_key == memory.memory_key
+                    or (memory.memory_key == "current_weight" and (
+                        item.memory_key in {"current_weight", "weight", "user_weight", "body_weight", "current_body_weight"}
+                        or "weight" in item.memory_content.lower()
+                        or "weigh" in item.memory_content.lower()
+                    ))
+                    or (memory.memory_key == "name" and (
+                        item.memory_key in {"name", "user_name", "preferred_name"}
+                        or "name is" in item.memory_content.lower()
+                        or "call me" in item.memory_content.lower()
+                    ))
+                )
+                if is_match:
+                    previous_items.append(item)
+
+            for previous in previous_items:
                 logger.debug(
-                    "superseding memory user=%s memory_key=%s previous_id=%s",
+                    "superseding memory user=%s memory_key=%s previous_id=%s new_id=%s",
                     memory.user_id,
                     memory.memory_key,
                     previous.id,
+                    inserted.id,
                 )
                 self._execute(
                     self.client.table("user_memories")
                     .update({
                         "is_current": False,
-                        "superseded_by": memory.id,
+                        "superseded_by": inserted.id,
                         "memory_key": memory.memory_key,
+                        "memory_type": memory.memory_type,
                         "updated_at": utcnow().isoformat(),
                     })
                     .eq("user_id", memory.user_id)
                     .eq("id", previous.id)
                 )
-        rows = self._execute(self.client.table("user_memories").insert(memory.model_dump(mode="json")))
+
         logger.debug(
             "memory stored user=%s memory_type=%s memory_key=%s confirmed=%s current=%s",
-            memory.user_id,
-            memory.memory_type,
-            memory.memory_key,
-            memory.confirmed,
-            memory.is_current,
+            inserted.user_id,
+            inserted.memory_type,
+            inserted.memory_key,
+            inserted.confirmed,
+            inserted.is_current,
         )
-        return self._one(rows, MemoryRecord) or memory
+        return inserted
 
     def list_memories(self, user_id: str, memory_type: str | None = None) -> list[MemoryRecord]:
         query = self.client.table("user_memories").select("*").eq("user_id", user_id)
@@ -230,8 +257,7 @@ class SupabaseCareStore:
         rows = self._execute(query.order("updated_at", desc=True))
         memories = [MemoryRecord.model_validate(row) for row in rows]
         for memory in memories:
-            if memory.memory_key is None:
-                memory.memory_key = infer_memory_key(memory.memory_content)
+            memory.memory_key = normalize_canonical_key(memory.memory_key, memory.memory_type, memory.memory_content)
         return memories
 
     def update_memory(self, user_id: str, memory_id: str, memory_content: str) -> MemoryRecord:
@@ -384,7 +410,7 @@ class SupabaseCareStore:
 
     def find_similar_memory(self, user_id: str, memory_type: str, content: str) -> MemoryRecord | None:
         for memory in self.list_memories(user_id, memory_type):
-            if is_near_duplicate(memory.memory_content, content):
+            if memory.is_current and is_near_duplicate(memory.memory_content, content):
                 return memory
         return None
 

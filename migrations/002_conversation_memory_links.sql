@@ -1,5 +1,3 @@
--- Apply this migration to an existing Supabase project that predates
--- conversation-linked memory records.
 alter table public.user_memories
     add column if not exists conversation_id uuid
     references public.conversations (id) on delete cascade;

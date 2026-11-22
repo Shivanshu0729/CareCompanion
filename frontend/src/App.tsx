@@ -69,7 +69,17 @@ export default function App() {
     </div>
   </main>;
 
-  const selectConversation = async (id: string) => { setActive(id); setPage("chat"); setMessages((await api.conversation(id)).messages); };
+  const selectConversation = async (id: string) => {
+    setActive(id);
+    setPage("chat");
+    const data = await api.conversation(id);
+    setMessages(data.messages);
+    if (data.conversation?.title) {
+      setConversations((items) =>
+        items.map((c) => (c.id === id ? { ...c, title: data.conversation.title } : c))
+      );
+    }
+  };
   const refreshMemory = async () => setMemory(await api.memory());
   const send = async (text: string): Promise<boolean> => {
     if (!active) return false;
@@ -82,6 +92,13 @@ export default function App() {
       const result = await api.sendMessage(conversationId, text);
       setMessages((items) => [...items, { id: crypto.randomUUID(), role: "assistant", content: result.assistant_message }]);
       setPendingMemories(result.pending_memories ?? []);
+      if (result.conversation_title) {
+        setConversations((items) =>
+          items.map((conv) =>
+            conv.id === conversationId ? { ...conv, title: result.conversation_title! } : conv
+          )
+        );
+      }
       await refreshMemory();
       return true;
     } catch (e) {
@@ -92,7 +109,13 @@ export default function App() {
       setBusy(false);
     }
   };
-  const newChat = async () => { const item = await api.createConversation(); setConversations((items) => [item, ...items]); await selectConversation(item.id); };
+  const newChat = async () => {
+    const item = await api.createConversation();
+    setConversations((items) => [item, ...items]);
+    setActive(item.id);
+    setPage("chat");
+    setMessages([]);
+  };
   const rename = async (item: Conversation) => { const title = window.prompt("Conversation name", item.title); if (!title) return; const updated = await api.updateConversation(item.id, { title }); setConversations((items) => items.map((value) => value.id === item.id ? updated : value)); };
   const pin = async (item: Conversation) => { const updated = await api.updateConversation(item.id, { is_pinned: !item.is_pinned }); setConversations((items) => items.map((value) => value.id === item.id ? updated : value)); };
   const remove = async (item: Conversation) => { if (!window.confirm(`Delete "${item.title}"?`)) return; await api.deleteConversation(item.id); const rest = conversations.filter((value) => value.id !== item.id); setConversations(rest); if (active === item.id) { const next = rest[0] ?? await api.createConversation(); setConversations(rest.length ? rest : [next]); await selectConversation(next.id); } };
@@ -105,7 +128,21 @@ export default function App() {
     setNamePrompt(false);
   };
 
-  const confirmPendingMemory = async (item: PendingMemory) => { await api.confirmMemory(item.content, item.conversation_id); setPendingMemories((items) => items.filter((value) => value !== item)); await refreshMemory(); };
+  const saveAllPendingMemories = async () => {
+    try {
+      setBusy(true);
+      setError("");
+      for (const item of pendingMemories) {
+        await api.confirmMemory(item.content, item.conversation_id, item.category || "health");
+      }
+      setPendingMemories([]);
+      await refreshMemory();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to save memory.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return <div className="flex h-screen overflow-hidden">
     <aside className="w-72 shrink-0 overflow-y-auto bg-inkdeep p-5 text-white">
@@ -124,7 +161,7 @@ export default function App() {
       </div>
       {page === "chat" && <div className="shrink-0 border-t border-line bg-page px-6 pt-3 pb-5 md:px-10"><ChatComposer onSend={send} busy={busy} /></div>}
     </main>
-    {pendingMemories.length > 0 && <div className="welcome-modal-backdrop fixed inset-0 z-40 grid place-items-center bg-[#142033]/45 p-5 backdrop-blur-sm"><div className="welcome-modal w-full max-w-lg rounded-2xl bg-[#FBF8F1] p-7 shadow-2xl"><p className="text-sm uppercase tracking-[0.18em] text-dusk">Permission to remember</p><h2 className="mt-2 text-3xl">Save this health information?</h2><p className="mt-3 leading-6 text-quiet">This is sensitive information you shared. Save it so future conversations can use it for safer, more relevant general guidance?</p><div className="my-5 rounded-lg border border-line bg-white p-4 text-sm">{pendingMemories.map((item) => <p key={item.content}>{item.content}</p>)}</div><div className="flex justify-end gap-3"><button onClick={() => setPendingMemories([])} className="rounded-lg px-4 py-2 text-sm text-quiet hover:bg-[#F0EADF]">Do not save</button><button onClick={() => void Promise.all(pendingMemories.map(confirmPendingMemory))} className="rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white">Save for future chats</button></div></div></div>}
+    {pendingMemories.length > 0 && <div className="welcome-modal-backdrop fixed inset-0 z-40 grid place-items-center bg-[#142033]/45 p-5 backdrop-blur-sm"><div className="welcome-modal w-full max-w-lg rounded-2xl bg-[#FBF8F1] p-7 shadow-2xl"><p className="text-sm uppercase tracking-[0.18em] text-dusk">Permission to remember</p><h2 className="mt-2 text-3xl">Save this health information?</h2><p className="mt-3 leading-6 text-quiet">This is sensitive information you shared. Save it so future conversations can use it for safer, more relevant general guidance?</p><div className="my-5 rounded-lg border border-line bg-white p-4 text-sm">{pendingMemories.map((item, idx) => <p key={idx} className="text-ink">{item.content}</p>)}</div><div className="flex justify-end gap-3"><button type="button" onClick={() => setPendingMemories([])} className="rounded-lg px-4 py-2 text-sm text-quiet hover:bg-[#F0EADF]">Do not save</button><button type="button" onClick={() => void saveAllPendingMemories()} disabled={busy} className="rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white transition hover:bg-[#263D59] disabled:opacity-50">{busy ? "Saving..." : "Save for future chats"}</button></div></div></div>}
     {namePrompt && <div className="welcome-modal-backdrop fixed inset-0 z-50 grid place-items-center bg-[#142033]/45 p-5 backdrop-blur-sm"><div className="welcome-modal w-full max-w-md rounded-2xl bg-[#FBF8F1] p-7 shadow-2xl"><div className="mb-5 grid h-12 w-12 place-items-center rounded-full bg-[#E7D3A8] text-xl text-ink">C</div><p className="text-sm uppercase tracking-[0.18em] text-dusk">A quick welcome</p><h2 className="mt-2 text-3xl">What should I call you?</h2><p className="mt-2 leading-6 text-quiet">This helps make your conversations feel more personal. You can skip this and add it later.</p><input autoFocus value={preferredName} onChange={(event) => setPreferredName(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void savePreferredName(); }} placeholder="Your preferred name" className="mt-6 w-full rounded-lg border border-line bg-white p-3.5 text-ink outline-none focus:border-dusk" /><div className="mt-5 flex justify-end gap-3"><button onClick={() => setNamePrompt(false)} className="rounded-lg px-4 py-2 text-sm text-quiet hover:bg-[#F0EADF]">Skip</button><button onClick={() => void savePreferredName()} disabled={!preferredName.trim()} className="rounded-lg bg-ink px-5 py-2.5 text-sm font-medium text-white disabled:opacity-40">Continue</button></div></div></div>}
   </div>;
 }

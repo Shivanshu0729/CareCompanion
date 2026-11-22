@@ -79,7 +79,7 @@ def test_extractor_persists_name_and_weight(store: InMemoryCareStore, llm: Scrip
     payload = extractor.extract_payload("My name is Shivanshu and my weight is 80 kg.", "Thanks.")
     extractor.persist(user_a, conversation.id, payload)
 
-    memories = store.list_memories(user_a, "preference")
+    memories = store.list_memories(user_a)
     contents = " ".join(item.memory_content for item in memories).lower()
     assert "shivanshu" in contents
     assert "80 kg" in contents
@@ -102,7 +102,7 @@ def test_extractor_uses_model_output_for_natural_personal_detail_phrasing(
     extractor.persist(user_a, conversation.id, payload)
 
     contents = " ".join(
-        item.memory_content for item in store.list_memories(user_a, "preference")
+        item.memory_content for item in store.list_memories(user_a)
     ).lower()
     assert "shivanshu" in contents
     assert "70 kilograms" in contents
@@ -161,8 +161,8 @@ def test_weight_update_is_used_in_a_new_profile_conversation(
     extractor.persist(user_a, first.id, extractor.extract_payload("My weight is 80 kg.", "Saved."))
     extractor.persist(user_a, second.id, extractor.extract_payload("My weight is now 70 kg.", "Updated."))
 
-    memories = store.list_memories(user_a, "preference")
-    current_weights = [item for item in memories if item.memory_key == "weight" and item.is_current]
+    memories = store.list_memories(user_a, "health")
+    current_weights = [item for item in memories if item.memory_key == "current_weight" and item.is_current]
     assert len(current_weights) == 1
     assert "70 kg" in current_weights[0].memory_content
     assert any("80 kg" in item.memory_content and not item.is_current for item in memories)
@@ -172,6 +172,8 @@ def test_weight_update_is_used_in_a_new_profile_conversation(
     assert "70 kg" in profile_text
     assert "80 kg" not in profile_text
     assert not MemoryManager(store).retrieve(user_b, "Tell me all about Shivanshu.")
+    short_profile = MemoryManager(store).retrieve(user_a, "Tell me about Shivanshu")
+    assert "70 kg" in " ".join(item.content for item in short_profile)
 
 
 def test_deleting_conversation_deletes_its_memories(store: InMemoryCareStore, user_a: str) -> None:
@@ -188,3 +190,37 @@ def test_deleting_conversation_deletes_its_memories(store: InMemoryCareStore, us
     assert store.list_memories(user_a, "preference") == []
 
     assert store.list_goals(user_a) == []
+
+
+def test_confirm_pending_memory(store: InMemoryCareStore, user_a: str) -> None:
+    conv = store.create_conversation(user_a, "Consent chat")
+    
+    # 1. Confirm sensitive medical condition
+    mem_health = MemoryRecord(
+        user_id=user_a,
+        memory_type="health",
+        memory_content="User reported severe asthma",
+        conversation_id=conv.id,
+        source="user_reported",
+        confirmed=True,
+        is_current=True,
+    )
+    saved = store.add_memory(mem_health)
+    assert saved.confirmed is True
+    assert saved.is_current is True
+
+    # 2. Confirm weight update
+    mem_weight = MemoryRecord(
+        user_id=user_a,
+        memory_type="profile",
+        memory_content="User's weight is 60 kg",
+        conversation_id=conv.id,
+        source="user_reported",
+        confirmed=True,
+        is_current=True,
+    )
+    saved_weight = store.add_memory(mem_weight)
+    assert saved_weight.confirmed is True
+    assert saved_weight.memory_key == "current_weight"
+    assert saved_weight.memory_type == "health"
+    assert saved_weight.is_current is True

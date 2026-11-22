@@ -20,9 +20,34 @@ class ScriptedLLM:
         self.calls.append(list(messages))
         system = messages[0].content.lower() if messages else ""
         user = messages[-1].content if messages else ""
+        if "title generator" in system or "conversation title generator" in system:
+            return LLMResponse(content=self._title(user), model="scripted")
         if "return json only" in system or "extract durable" in system:
             return LLMResponse(content=self._extraction(user), model="scripted")
         return LLMResponse(content=self._coach(system, user), model="scripted")
+
+    def _title(self, raw: str) -> str:
+        from src.services.title_generator import generate_fallback_title
+        lowered = raw.lower()
+        if "sleep schedule" in lowered or "improve my sleep" in lowered:
+            return "Improving Sleep Schedule"
+        if "eat to lose weight" in lowered or "lose weight" in lowered:
+            return "Weight Loss Nutrition"
+        if "feeling tired" in lowered or "tired recently" in lowered:
+            return "Understanding Daily Fatigue"
+        if "workout routine" in lowered:
+            return "Building a Workout Routine"
+        if "sleep data" in lowered:
+            return "Sleep Data Analysis"
+        if "daily activity" in lowered:
+            return "Improving Daily Activity"
+        return generate_fallback_title(raw)
+
+    def stream_generate(self, messages, temperature: float = 0.4, max_tokens: int = 900):
+        resp = self.generate(messages, temperature=temperature, max_tokens=max_tokens)
+        words = resp.content.split(" ")
+        for i, word in enumerate(words):
+            yield word + (" " if i < len(words) - 1 else "")
 
     def _extraction(self, raw: str) -> str:
         lowered = raw.lower()

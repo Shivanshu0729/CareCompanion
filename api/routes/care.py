@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import date
+import json
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from api.deps import CurrentUser, get_current_user
@@ -13,6 +15,14 @@ from src.database.models import MemoryRecord
 from src.database.repository import SupabaseCareStore
 from src.llm.groq_client import GroqClient
 from src.services.conversation_service import ConversationService
+from src.services.text_utils import (
+    canonical_category,
+    canonical_memory_key,
+    extract_weight_update,
+    is_near_duplicate,
+    is_single_value_key,
+    normalize_canonical_key,
+)
 
 router = APIRouter(prefix="/api", tags=["care"])
 
@@ -33,6 +43,13 @@ class MessageCreate(BaseModel):
 class MemoryCreate(BaseModel):
     content: str = Field(min_length=1, max_length=500)
     memory_type: str = Field(default="preference", max_length=40)
+    conversation_id: str | None = None
+    importance: float = 0.7
+
+
+class MemoryConfirmCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=500)
+    memory_type: str = Field(default="health", max_length=40)
     conversation_id: str | None = None
 
 
@@ -120,6 +137,8 @@ def send_message(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
         "assistant_message": turn.assistant_message,
+        "conversation_title": turn.conversation_title,
+        "conversation_id": conversation_id,
         "memories_used": [item.__dict__ for item in turn.memories_used],
         "pending_memories": [
             {"category": "health", "content": item.concern, "conversation_id": conversation_id}
@@ -130,38 +149,124 @@ def send_message(
     }
 
 
+@router.post("/conversations/{conversation_id}/messages/stream")
+def stream_message(
+    conversation_id: str,
+    body: MessageCreate,
+    user: CurrentUser = Depends(get_current_user),
+):
+    store = _store(user)
+    coach = WellnessCoach(
+        store,
+        GroqClient(),
+        health_service=HealthService(),
+    )
+
+    def event_stream():
+        try:
+            for chunk in coach.stream_respond(user.id, conversation_id, body.content):
+                yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as exc:
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @router.get("/memory")
-def list_memory(user: CurrentUser = Depends(get_current_user)):
+def list_memory(
+    category: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    include_history: bool = Query(default=False),
+    user: CurrentUser = Depends(get_current_user),
+):
     store = _store(user)
     items = []
+    seen_single_keys: set[str] = set()
+    search_lower = search.strip().lower() if search else ""
+
     for memory in store.list_memories(user.id):
-        if memory.memory_type == "setting" or not memory.confirmed or not memory.is_current:
+        if memory.memory_type == "setting" or not memory.confirmed:
             continue
+        if not include_history and not memory.is_current:
+            continue
+
+        # Canonical key and category resolution
+        c_key = normalize_canonical_key(memory.memory_key, memory.memory_type, memory.memory_content)
+        cat = canonical_category(c_key, memory.memory_content, memory.memory_type)
+
+        # Single-value deduplication: only latest current value appears as current
+        if not include_history and c_key and is_single_value_key(c_key):
+            if c_key in seen_single_keys:
+                continue
+            seen_single_keys.add(c_key)
+
+        if category and category.lower() != "all" and cat.lower() != category.lower():
+            continue
+        if search_lower and search_lower not in memory.memory_content.lower():
+            continue
+
         items.append({
             "id": memory.id,
-            "label": memory.memory_type.replace("_", " ").title(),
+            "category": cat,
+            "label": cat.replace("_", " ").title(),
             "text": memory.memory_content,
+            "key": c_key,
+            "importance": getattr(memory, "importance", 0.7),
+            "confidence": getattr(memory, "confidence", 0.7),
             "confirmed": memory.confirmed,
             "is_current": memory.is_current,
             "created_at": memory.created_at.isoformat(),
             "updated_at": memory.updated_at.isoformat(),
         })
-    for goal in store.list_goals(user.id)[:3]:
-        items.append({"id": f"goal:{goal.id}", "label": "Goal", "text": goal.goal_description})
-    for summary in store.list_session_summaries(user.id)[:1]:
-        items.append({"id": f"summary:{summary.id}", "label": "Last session", "text": summary.summary})
-    return items[:12]
+
+    # Include legacy goals from goals table only if not already present from user_memories
+    if not category or category.lower() in {"all", "goal"}:
+        seen_goals = {it["text"].lower() for it in items if it["category"] == "goal"}
+        for goal in store.list_goals(user.id):
+            desc = goal.goal_description.strip()
+            if any(is_near_duplicate(desc, existing) for existing in seen_goals):
+                continue
+            if search_lower and search_lower not in desc.lower():
+                continue
+            seen_goals.add(desc.lower())
+            items.append({
+                "id": f"goal:{goal.id}",
+                "category": "goal",
+                "label": "Goal",
+                "text": f"{desc} (status: {goal.status})",
+                "importance": 0.85,
+                "confidence": 0.9,
+                "confirmed": True,
+                "is_current": goal.status != "completed",
+                "created_at": goal.created_at.isoformat(),
+                "updated_at": goal.updated_at.isoformat(),
+            })
+
+    return items[:50]
 
 
 @router.post("/memory")
 def create_memory(body: MemoryCreate, user: CurrentUser = Depends(get_current_user)):
+    c_key = normalize_canonical_key(None, body.memory_type, body.content)
+    cat = canonical_category(c_key, body.content, body.memory_type)
+    content = body.content.strip()
+    if c_key == "current_weight":
+        weight_update = extract_weight_update(content)
+        if weight_update:
+            content = weight_update[2]
+
     memory = MemoryRecord(
         user_id=user.id,
-        memory_type=body.memory_type,
-        memory_content=body.content.strip(),
+        conversation_id=body.conversation_id,
+        memory_type=cat,
+        memory_content=content,
         source="user_reported",
         confidence=1.0,
+        importance=body.importance,
         confirmed=True,
+        is_current=True,
+        memory_key=c_key,
     )
     return _store(user).add_memory(memory).model_dump(mode="json")
 
@@ -173,7 +278,11 @@ def update_memory(
     user: CurrentUser = Depends(get_current_user),
 ):
     try:
-        return _store(user).update_memory(user.id, memory_id, body.content.strip()).model_dump(mode="json")
+        content = body.content.strip()
+        weight_update = extract_weight_update(content)
+        if weight_update:
+            content = weight_update[2]
+        return _store(user).update_memory(user.id, memory_id, content).model_dump(mode="json")
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
@@ -191,17 +300,26 @@ def clear_memory(user: CurrentUser = Depends(get_current_user)):
 
 
 @router.post("/memory/confirm")
-def confirm_memory(body: MemoryCreate, user: CurrentUser = Depends(get_current_user)):
-    if body.memory_type != "health":
-        raise HTTPException(status_code=400, detail="Only health memories require confirmation.")
+def confirm_memory(body: MemoryConfirmCreate, user: CurrentUser = Depends(get_current_user)):
+    content = body.content.strip()
+    c_key = normalize_canonical_key(None, body.memory_type, content)
+    cat = canonical_category(c_key, content, body.memory_type)
+    if c_key == "current_weight":
+        weight_update = extract_weight_update(content)
+        if weight_update:
+            content = weight_update[2]
+
     memory = MemoryRecord(
         user_id=user.id,
-        memory_type="health",
-        memory_content=f"User-reported health concern: {body.content.strip()}",
+        memory_type=cat,
+        memory_content=content,
         conversation_id=body.conversation_id,
         source="user_reported",
-        confidence=0.85,
+        confidence=1.0,
+        importance=0.95,
         confirmed=True,
+        is_current=True,
+        memory_key=c_key,
     )
     return _store(user).add_memory(memory).model_dump(mode="json")
 

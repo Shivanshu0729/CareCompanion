@@ -18,12 +18,6 @@ from src.llm.prompts import (
 )
 from src.llm.provider import LLMMessage, LLMProvider
 from src.services.conversation_service import ConversationService
-from src.services.single_user_guard import (
-    OFF_TOPIC_HEALTH_REDIRECT,
-    THIRD_PARTY_REFUSAL_MESSAGE,
-    is_off_topic_non_health,
-    is_third_party_health_request,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -86,34 +80,6 @@ class WellnessCoach:
             raise ValueError("Enter a message before sending.")
 
         conversation, history, memories, health, prompt = self._prepare_prompt(user_id, conversation_id, text)
-
-        # 1. Strict single-user health coaching check
-        is_third_party, subject = is_third_party_health_request(text)
-        if is_third_party:
-            self.store.add_message(user_id, conversation_id, "user", text)
-            self.store.add_message(user_id, conversation_id, "assistant", THIRD_PARTY_REFUSAL_MESSAGE)
-            return CoachTurn(
-                assistant_message=THIRD_PARTY_REFUSAL_MESSAGE,
-                memories_used=[],
-                health_used=None,
-                extraction=None,
-                conversation_id=conversation_id,
-                conversation_title=conversation.title,
-            )
-
-        # 2. Health-domain boundary check
-        is_off_topic, category = is_off_topic_non_health(text)
-        if is_off_topic:
-            self.store.add_message(user_id, conversation_id, "user", text)
-            self.store.add_message(user_id, conversation_id, "assistant", OFF_TOPIC_HEALTH_REDIRECT)
-            return CoachTurn(
-                assistant_message=OFF_TOPIC_HEALTH_REDIRECT,
-                memories_used=[],
-                health_used=None,
-                extraction=None,
-                conversation_id=conversation_id,
-                conversation_title=conversation.title,
-            )
 
         try:
             if self.memory_manager.is_profile_query(text) and memories:
@@ -202,22 +168,6 @@ class WellnessCoach:
             raise ValueError("Enter a message before sending.")
 
         conversation, history, memories, health, prompt = self._prepare_prompt(user_id, conversation_id, text)
-
-        # 1. Strict single-user health coaching check
-        is_third_party, subject = is_third_party_health_request(text)
-        if is_third_party:
-            self.store.add_message(user_id, conversation_id, "user", text)
-            self.store.add_message(user_id, conversation_id, "assistant", THIRD_PARTY_REFUSAL_MESSAGE)
-            yield THIRD_PARTY_REFUSAL_MESSAGE
-            return
-
-        # 2. Health-domain boundary check
-        is_off_topic, category = is_off_topic_non_health(text)
-        if is_off_topic:
-            self.store.add_message(user_id, conversation_id, "user", text)
-            self.store.add_message(user_id, conversation_id, "assistant", OFF_TOPIC_HEALTH_REDIRECT)
-            yield OFF_TOPIC_HEALTH_REDIRECT
-            return
         history_count = len(history)
 
         if self.memory_manager.is_profile_query(text) and memories:

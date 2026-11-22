@@ -37,8 +37,8 @@ class ResetPassword(BaseModel):
     new_password: str = Field(min_length=1, max_length=256)
 
 
-def _user_payload(user_id: str, email: str, onboarding_completed: bool = False) -> dict[str, Any]:
-    return {"user": {"id": user_id, "email": email, "onboarding_completed": onboarding_completed}}
+def _user_payload(user_id: str, email: str) -> dict[str, dict[str, str]]:
+    return {"user": {"id": user_id, "email": email}}
 
 
 @router.post("/login")
@@ -48,16 +48,7 @@ def login(body: Credentials, response: Response, settings: Settings = Depends(se
     except AuthenticationError as exc:
         raise api_error(401, "invalid_credentials", public_message(exc)) from exc
     set_session_cookie(response, session, settings)
-    onboarded = False
-    try:
-        from src.database.connection import create_authenticated_client
-        from src.database.repository import SupabaseCareStore
-        client = create_authenticated_client(session.access_token, settings)
-        profile = SupabaseCareStore(client).get_profile(session.user.id)
-        onboarded = bool(profile and profile.onboarding_completed)
-    except Exception:
-        onboarded = False
-    return _user_payload(session.user.id, session.user.email, onboarding_completed=onboarded)
+    return _user_payload(session.user.id, session.user.email)
 
 
 @router.post("/register")
@@ -77,7 +68,7 @@ def register(body: Credentials, response: Response, settings: Settings = Depends
     except AuthenticationError as exc:
         raise api_error(400, "registration_failed", public_message(exc)) from exc
     set_session_cookie(response, session, settings)
-    return _user_payload(session.user.id, session.user.email, onboarding_completed=False)
+    return _user_payload(session.user.id, session.user.email)
 
 
 @router.post("/forgot-password")
@@ -109,11 +100,4 @@ def logout(response: Response):
 
 @router.get("/me")
 def me(user: CurrentUser = Depends(get_current_user)):
-    onboarded = False
-    try:
-        from src.database.repository import SupabaseCareStore
-        profile = SupabaseCareStore(user.client).get_profile(user.id)
-        onboarded = bool(profile and profile.onboarding_completed)
-    except Exception:
-        onboarded = False
-    return _user_payload(user.id, user.email, onboarding_completed=onboarded)
+    return _user_payload(user.id, user.email)

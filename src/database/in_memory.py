@@ -12,7 +12,6 @@ from src.database.models import (
     Outcome,
     Recommendation,
     SessionSummary,
-    UserProfile,
     utcnow,
 )
 from src.services.text_utils import (
@@ -34,7 +33,6 @@ class InMemoryCareStore:
         self.summaries: dict[str, SessionSummary] = {}
         self.goals: dict[str, Goal] = {}
         self.recommendations: dict[str, Recommendation] = {}
-        self.profiles: dict[str, UserProfile] = {}
         self.commitments: dict[str, Commitment] = {}
         self.outcomes: dict[str, Outcome] = {}
         self.obstacles: dict[str, Obstacle] = {}
@@ -205,42 +203,16 @@ class InMemoryCareStore:
         self.memories[replacement.id] = replacement
         return deepcopy(replacement)
 
-    def get_memory(self, user_id: str, memory_id: str) -> MemoryRecord | None:
-        memory = self.memories.get(memory_id)
-        if memory is None or memory.user_id != user_id:
-            return None
-        return deepcopy(memory)
-
     def delete_memory(self, user_id: str, memory_id: str) -> None:
         memory = self.memories.get(memory_id)
         if memory is None or memory.user_id != user_id:
-            raise KeyError("Memory not found.")
+            return
         del self.memories[memory_id]
 
     def clear_memories(self, user_id: str) -> None:
         for key, memory in list(self.memories.items()):
             if memory.user_id == user_id:
                 del self.memories[key]
-
-    def get_profile(self, user_id: str) -> UserProfile | None:
-        profile = self.profiles.get(user_id)
-        if profile is None or profile.user_id != user_id:
-            return None
-        return deepcopy(profile)
-
-    def save_profile(self, profile: UserProfile) -> UserProfile:
-        self.profiles[profile.user_id] = deepcopy(profile)
-        return deepcopy(profile)
-
-    def update_profile(self, user_id: str, updates: dict[str, Any]) -> UserProfile:
-        profile = self.profiles.get(user_id)
-        if profile is None or profile.user_id != user_id:
-            raise KeyError("Profile not found.")
-        for k, v in updates.items():
-            if hasattr(profile, k):
-                setattr(profile, k, v)
-        profile.updated_at = utcnow()
-        return deepcopy(profile)
 
     def add_session_summary(self, summary: SessionSummary) -> SessionSummary:
         self.summaries[summary.id] = summary

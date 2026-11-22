@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from api.deps import CurrentUser, get_current_user
 from src.agent.coach import WellnessCoach
 from src.data.health_service import HealthService
-from src.database.models import MemoryRecord, UserProfile
+from src.database.models import MemoryRecord
 from src.database.repository import SupabaseCareStore
 from src.llm.exceptions import LLMError
 from src.llm.groq_client import GroqClient
@@ -56,48 +56,6 @@ class MemoryConfirmCreate(BaseModel):
 
 class MemoryUpdate(BaseModel):
     content: str = Field(min_length=1, max_length=500)
-
-
-class ProfileUpdate(BaseModel):
-    full_name: str | None = None
-    age: int | None = None
-    date_of_birth: str | None = None
-    sex: str | None = None
-    height: float | None = None
-    current_weight: float | None = None
-    unit_preference: str | None = None
-    primary_goal: str | None = None
-    goals: list[str] | None = None
-    activity_level: str | None = None
-    dietary_preference: str | None = None
-    allergies: str | None = None
-    medical_conditions: str | None = None
-    medications: str | None = None
-    injuries_limitations: str | None = None
-    sleep_duration_hours: float | None = None
-    sleep_quality: str | None = None
-    lifestyle_notes: str | None = None
-
-
-class OnboardingPayload(BaseModel):
-    full_name: str = Field(default="", max_length=100)
-    age: int | None = Field(default=None, ge=1, le=120)
-    date_of_birth: str | None = None
-    sex: str = Field(default="prefer_not_to_say")
-    height: float | None = Field(default=None, ge=30, le=300)
-    current_weight: float | None = Field(default=None, ge=20, le=400)
-    unit_preference: str = Field(default="metric")
-    primary_goal: str = Field(default="")
-    goals: list[str] = Field(default_factory=list)
-    activity_level: str = Field(default="sedentary")
-    dietary_preference: str = Field(default="any")
-    allergies: str = Field(default="")
-    medical_conditions: str = Field(default="")
-    medications: str = Field(default="")
-    injuries_limitations: str = Field(default="")
-    sleep_duration_hours: float | None = Field(default=None, ge=0, le=24)
-    sleep_quality: str = Field(default="")
-    lifestyle_notes: str = Field(default="")
 
 
 def _store(user: CurrentUser) -> SupabaseCareStore:
@@ -332,159 +290,10 @@ def update_memory(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.get("/memory/{memory_id}")
-def get_memory(memory_id: str, user: CurrentUser = Depends(get_current_user)):
-    item = _store(user).get_memory(user.id, memory_id)
-    if item is None:
-        raise HTTPException(status_code=404, detail="Memory not found.")
-    return item.model_dump(mode="json")
-
-
 @router.delete("/memory/{memory_id}")
 def delete_memory(memory_id: str, user: CurrentUser = Depends(get_current_user)):
-    try:
-        _store(user).delete_memory(user.id, memory_id)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _store(user).delete_memory(user.id, memory_id)
     return {"ok": True}
-
-
-@router.get("/profile")
-def get_user_profile(user: CurrentUser = Depends(get_current_user)):
-    store = _store(user)
-    profile = store.get_profile(user.id)
-    return {
-        "profile": profile.model_dump(mode="json") if profile else None,
-        "onboarding_completed": bool(profile and profile.onboarding_completed),
-    }
-
-
-@router.get("/profile/{profile_id}")
-def get_profile_by_id(profile_id: str, user: CurrentUser = Depends(get_current_user)):
-    store = _store(user)
-    profile = store.get_profile(user.id)
-    if profile is None or (profile.id != profile_id and user.id != profile_id):
-        raise HTTPException(status_code=404, detail="Profile not found.")
-    return {
-        "profile": profile.model_dump(mode="json"),
-        "onboarding_completed": profile.onboarding_completed,
-    }
-
-
-@router.post("/profile/onboarding")
-def complete_onboarding(body: OnboardingPayload, user: CurrentUser = Depends(get_current_user)):
-    store = _store(user)
-    profile = UserProfile(
-        user_id=user.id,
-        full_name=body.full_name.strip(),
-        age=body.age,
-        date_of_birth=body.date_of_birth,
-        sex=body.sex,
-        height=body.height,
-        current_weight=body.current_weight,
-        unit_preference=body.unit_preference,
-        primary_goal=body.primary_goal,
-        goals=body.goals,
-        activity_level=body.activity_level,
-        dietary_preference=body.dietary_preference,
-        allergies=body.allergies.strip(),
-        medical_conditions=body.medical_conditions.strip(),
-        medications=body.medications.strip(),
-        injuries_limitations=body.injuries_limitations.strip(),
-        sleep_duration_hours=body.sleep_duration_hours,
-        sleep_quality=body.sleep_quality,
-        lifestyle_notes=body.lifestyle_notes.strip(),
-        onboarding_completed=True,
-    )
-    saved = store.save_profile(profile)
-
-    # Establish baseline memories for the user
-    if profile.full_name:
-        store.add_memory(MemoryRecord(
-            user_id=user.id,
-            memory_type="profile",
-            memory_content=f"User's name is {profile.full_name}.",
-            memory_key="name",
-            confirmed=True,
-            is_current=True,
-        ))
-    if profile.current_weight:
-        unit = "kg" if profile.unit_preference == "metric" else "lbs"
-        store.add_memory(MemoryRecord(
-            user_id=user.id,
-            memory_type="health",
-            memory_content=f"User's weight is {profile.current_weight} {unit}.",
-            memory_key="current_weight",
-            confirmed=True,
-            is_current=True,
-        ))
-    if profile.height:
-        unit = "cm" if profile.unit_preference == "metric" else "inches"
-        store.add_memory(MemoryRecord(
-            user_id=user.id,
-            memory_type="health",
-            memory_content=f"User's height is {profile.height} {unit}.",
-            memory_key="height",
-            confirmed=True,
-            is_current=True,
-        ))
-    if profile.dietary_preference and profile.dietary_preference != "any":
-        store.add_memory(MemoryRecord(
-            user_id=user.id,
-            memory_type="health",
-            memory_content=f"User follows a {profile.dietary_preference} diet.",
-            memory_key="dietary_preference",
-            confirmed=True,
-            is_current=True,
-        ))
-    if profile.primary_goal or profile.goals:
-        goal_text = profile.primary_goal or ", ".join(profile.goals)
-        store.add_memory(MemoryRecord(
-            user_id=user.id,
-            memory_type="goal",
-            memory_content=f"Primary wellness goals: {goal_text}.",
-            memory_key="primary_fitness_goal",
-            confirmed=True,
-            is_current=True,
-        ))
-
-    return {"ok": True, "profile": saved.model_dump(mode="json")}
-
-
-@router.put("/profile")
-def update_user_profile(body: ProfileUpdate, user: CurrentUser = Depends(get_current_user)):
-    store = _store(user)
-    existing = store.get_profile(user.id)
-    if existing is None:
-        existing = UserProfile(user_id=user.id)
-        store.save_profile(existing)
-
-    updates = body.model_dump(exclude_unset=True)
-    updated = store.update_profile(user.id, updates)
-
-    # Sync weight update if weight was changed
-    if body.current_weight is not None:
-        unit = "kg" if updated.unit_preference == "metric" else "lbs"
-        store.add_memory(MemoryRecord(
-            user_id=user.id,
-            memory_type="health",
-            memory_content=f"User's weight is {body.current_weight} {unit}.",
-            memory_key="current_weight",
-            confirmed=True,
-            is_current=True,
-        ))
-    if body.height is not None:
-        unit = "cm" if updated.unit_preference == "metric" else "inches"
-        store.add_memory(MemoryRecord(
-            user_id=user.id,
-            memory_type="health",
-            memory_content=f"User's height is {body.height} {unit}.",
-            memory_key="height",
-            confirmed=True,
-            is_current=True,
-        ))
-
-    return {"ok": True, "profile": updated.model_dump(mode="json")}
 
 
 @router.delete("/memory")

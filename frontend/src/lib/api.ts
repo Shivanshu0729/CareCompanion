@@ -39,43 +39,8 @@ export type Dashboard = {
   source: string;
 };
 
-export type UserProfile = {
-  id?: string;
-  user_id?: string;
-  full_name: string;
-  age?: number | null;
-  date_of_birth?: string | null;
-  sex?: string;
-  height?: number | null;
-  current_weight?: number | null;
-  unit_preference: "metric" | "imperial";
-  primary_goal?: string;
-  goals: string[];
-  activity_level: string;
-  dietary_preference: string;
-  allergies?: string;
-  medical_conditions?: string;
-  medications?: string;
-  injuries_limitations?: string;
-  sleep_duration_hours?: number | null;
-  sleep_quality?: string;
-  lifestyle_notes?: string;
-  onboarding_completed: boolean;
-};
-
 export const api = {
-  me: () => request<{ user: { id: string; email: string; onboarding_completed?: boolean } }>("/api/auth/me"),
-  getProfile: () => request<{ profile: UserProfile | null; onboarding_completed: boolean }>("/api/profile"),
-  completeOnboarding: (data: Partial<UserProfile>) =>
-    request<{ ok: boolean; profile: UserProfile }>("/api/profile/onboarding", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  updateProfile: (data: Partial<UserProfile>) =>
-    request<{ ok: boolean; profile: UserProfile }>("/api/profile", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
+  me: () => request<{ user: { id: string; email: string } }>("/api/auth/me"),
   login: (email: string, password: string) => request("/api/auth/login", {
     method: "POST", body: JSON.stringify({ email, password }),
   }),

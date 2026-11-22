@@ -17,9 +17,6 @@ class ConversationService:
     def list(self, user_id: str):
         return self.store.list_conversations(user_id)
 
-    def get(self, user_id: str, conversation_id: str):
-        return self.store.get_conversation(user_id, conversation_id)
-
     def rename(self, user_id: str, conversation_id: str, title: str):
         cleaned = title.strip() or "New conversation"
         return self.store.rename_conversation(user_id, conversation_id, cleaned)
@@ -28,9 +25,6 @@ class ConversationService:
         return self.store.set_conversation_pinned(user_id, conversation_id, is_pinned)
 
     def delete(self, user_id: str, conversation_id: str) -> None:
-        conversation = self.store.get_conversation(user_id, conversation_id)
-        if conversation is None:
-            raise KeyError("Conversation not found.")
         self.store.delete_conversation(user_id, conversation_id)
 
     def title_from_first_message(self, message: str) -> str:

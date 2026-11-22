@@ -141,31 +141,5 @@ class HealthSummary(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
 
 
-class UserProfile(BaseModel):
-    id: str = Field(default_factory=new_id)
-    user_id: str
-    full_name: str = ""
-    age: int | None = None
-    date_of_birth: str | None = None
-    sex: str = "prefer_not_to_say"
-    height: float | None = None
-    current_weight: float | None = None
-    unit_preference: str = "metric"
-    primary_goal: str = ""
-    goals: list[str] = Field(default_factory=list)
-    activity_level: str = "sedentary"
-    dietary_preference: str = "any"
-    allergies: str = ""
-    medical_conditions: str = ""
-    medications: str = ""
-    injuries_limitations: str = ""
-    sleep_duration_hours: float | None = None
-    sleep_quality: str = ""
-    lifestyle_notes: str = ""
-    onboarding_completed: bool = False
-    created_at: datetime = Field(default_factory=utcnow)
-    updated_at: datetime = Field(default_factory=utcnow)
-
-
 def row_to_model(model_cls: type[BaseModel], row: dict[str, Any]) -> BaseModel:
     return model_cls.model_validate(row)

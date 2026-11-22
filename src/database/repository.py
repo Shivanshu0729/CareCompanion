@@ -13,7 +13,6 @@ from src.database.models import (
     Outcome,
     Recommendation,
     SessionSummary,
-    UserProfile,
     utcnow,
 )
 from src.services.text_utils import (
@@ -296,57 +295,13 @@ class SupabaseCareStore:
         )
         return self.add_memory(replacement)
 
-    def get_memory(self, user_id: str, memory_id: str) -> MemoryRecord | None:
-        rows = self._execute(
-            self.client.table("user_memories")
-            .select("*")
-            .eq("user_id", user_id)
-            .eq("id", memory_id)
-            .limit(1)
-        )
-        return self._one(rows, MemoryRecord)
-
     def delete_memory(self, user_id: str, memory_id: str) -> None:
-        existing = self.get_memory(user_id, memory_id)
-        if existing is None:
-            raise KeyError("Memory not found.")
         self._execute(
             self.client.table("user_memories").delete().eq("user_id", user_id).eq("id", memory_id)
         )
 
     def clear_memories(self, user_id: str) -> None:
         self._execute(self.client.table("user_memories").delete().eq("user_id", user_id))
-
-    def get_profile(self, user_id: str) -> UserProfile | None:
-        rows = self._execute(
-            self.client.table("user_profiles")
-            .select("*")
-            .eq("user_id", user_id)
-            .limit(1)
-        )
-        return self._one(rows, UserProfile)
-
-    def save_profile(self, profile: UserProfile) -> UserProfile:
-        payload = profile.model_dump(mode="json")
-        payload["updated_at"] = utcnow().isoformat()
-        rows = self._execute(
-            self.client.table("user_profiles")
-            .upsert(payload, on_conflict="user_id")
-        )
-        return self._one(rows, UserProfile) or profile
-
-    def update_profile(self, user_id: str, updates: dict[str, Any]) -> UserProfile:
-        clean_updates = dict(updates)
-        clean_updates["updated_at"] = utcnow().isoformat()
-        rows = self._execute(
-            self.client.table("user_profiles")
-            .update(clean_updates)
-            .eq("user_id", user_id)
-        )
-        profile = self._one(rows, UserProfile)
-        if profile is None:
-            raise KeyError("Profile not found.")
-        return profile
 
     def add_session_summary(self, summary: SessionSummary) -> SessionSummary:
         rows = self._execute(

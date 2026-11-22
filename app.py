@@ -20,7 +20,6 @@ from src.services.conversation_service import ConversationService
 from src.ui.auth_view import render_auth
 from src.ui.chat_view import render_chat
 from src.ui.dashboard_view import render_dashboard
-from src.ui.profile_view import render_onboarding, render_profile
 from src.ui.styles import inject_styles
 
 st.set_page_config(page_title="CareCompanion", page_icon="C", layout="wide")
@@ -161,9 +160,6 @@ with st.sidebar:
             st.session_state.pop("rename_thread", None)
 
     st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
-    if st.button("Health Profile", use_container_width=True):
-        st.session_state.page = "profile"
-        st.rerun()
     if st.button("Health Dashboard", use_container_width=True):
         st.session_state.page = "dashboard"
         st.rerun()
@@ -182,14 +178,8 @@ with st.sidebar:
 if not settings.groq_configured():
     st.warning("The AI service is not configured yet. Add the required settings before the coach can reply.")
 
-profile = store.get_profile(user_id)
-if profile is None or not profile.onboarding_completed:
-    render_onboarding(store, user_id, default_name=session.user.email.split("@")[0])
+page = st.session_state.page
+if page == "dashboard":
+    render_dashboard(store, health_service, user_id)
 else:
-    page = st.session_state.page
-    if page == "profile":
-        render_profile(store, user_id)
-    elif page == "dashboard":
-        render_dashboard(store, health_service, user_id)
-    else:
-        render_chat(store, coach, user_id)
+    render_chat(store, coach, user_id)
